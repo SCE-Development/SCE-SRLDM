@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from units import UpUnit, ConvLayers
+from units import UpUnit
 
 
 class Decoder(nn.Module):
@@ -12,7 +12,6 @@ class Decoder(nn.Module):
         inp_shape: Tuple[int, int, int],
         out_shape: Tuple[int, int, int],
         kernel_size: int,
-        head_size: int,
     ) -> None:
         """
         Initialize the decoder
@@ -20,6 +19,7 @@ class Decoder(nn.Module):
         Arguments:
             - inp_shape: Tuple[int, int] - the H, W, C of the input images
             - out_shape: Tuple[int, int] - the H, W, C of the output
+            - kernel_size: int - the size of the kernel to use for up convolution
         """
         super(Decoder, self).__init__()
 
@@ -41,9 +41,6 @@ class Decoder(nn.Module):
 
             cur_shape = desired_shape
             i += 1
-
-        # add output head
-        self.add_module(f"unit_{i}", ConvLayers(3, 3, head_size))
 
     def forward(self, x: torch.Tensor):
         """

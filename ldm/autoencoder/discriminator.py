@@ -15,6 +15,16 @@ class Discriminator(nn.Module):
         kernel_size: int,
         pool_size: int,
     ):
+        """
+        Initialize the discriminator
+
+        Arguments:
+            - input_shape: Tuple[int, int, int] - The input shape, in H,W,C
+            - n_conv_layers: int - the number of convolutional layers to use
+            - n_ff_layers: int - the number of feedforward layers to use after flattening
+            - kernel_size: int - the size of the convolution kernels
+            - pool_size: int - the size of the maxpool kernels
+        """
         super(Discriminator, self).__init__()
 
         # add convolutional layers

@@ -73,12 +73,15 @@ class DownUnit(nn.Module):
         )
 
     def forward(self, x: torch.Tensor):
+        """
+        Call the model on B,C,H,W input
+        """
         return self.unit(x)
 
 
 class UpUnit(nn.Module):
     """
-    Decoder Unit; Doubles the H,W of an input
+    UpUnit; Doubles the H,W of an input
     """
 
     def __init__(
@@ -87,10 +90,16 @@ class UpUnit(nn.Module):
         out_shape: Tuple[int, int, int],
         kernel_size: int,
     ) -> None:
+        """
+        Initialize the UpUnit
+
+        Arguments:
+            - in_shape: Tuple[int, int, int] - the expected input shape, in H,W,C format
+            - out_shape: Tuple[int, int, int] - the desired output shape, in H,W,C format
+            - kernel_size: int - the size of the kernel to use for the convolutional transpose
+        """
         super(UpUnit, self).__init__()
         self.out_channels = out_shape[-1]
-
-        self.head = ConvLayers(in_shape[-1], out_shape[-1], kernel_size)
 
         # calculate necessary padding
         # H_out=(H_in−1)×stride[0]−2×padding[0]+dilation[0]×(kernel_size[0]−1)+output_padding[0]+1
@@ -111,7 +120,9 @@ class UpUnit(nn.Module):
         self.GELU = nn.GELU()
 
     def forward(self, x: torch.Tensor):
-        # B,C,H,W input
+        """
+        Call the model on B,C,H,W input
+        """
         # upsample by 2
         output_size = x.shape
         output_size = [
@@ -121,6 +132,5 @@ class UpUnit(nn.Module):
             output_size[3] * 2,
         ]
 
-        x = self.head(x)
         x = self.GELU(self.convt(x, output_size=output_size))
         return x

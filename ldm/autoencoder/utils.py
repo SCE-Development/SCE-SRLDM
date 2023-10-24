@@ -3,6 +3,7 @@ import torch
 import random
 import matplotlib.pyplot as plt
 from PIL import Image
+from torch.utils.data import Dataset
 
 
 def to_image(x: torch.Tensor):
@@ -15,20 +16,29 @@ def to_image(x: torch.Tensor):
     )
 
 
-def get_comparison(num_comparisons: int, images: torch.Tensor, model: torch.nn.Module):
+def get_comparison(num_comparisons: int, ds: Dataset, model: torch.nn.Module):
+    """
+    Get comparisons between real images and generated images
+
+    Arguments:
+        - num_comparisons: int - the number of comparisons to generate
+        - ds: Dataset - the dataset with real images. Note: the dataset should have the image
+            tensors (in the format of C,H,W) as the first element in each item
+        - model: torch.nn.Module - an autoencoder
+    """
     choices = []
     while len(choices) != num_comparisons:
-        i = random.randint(0, len(images) - 1)
+        i = random.randint(0, len(ds) - 1)
         if i not in choices:
             choices.append(i)
 
     real_images = []
     for i in choices:
-        real_images.append(to_image(images[i]))
+        real_images.append(to_image(ds[i][0]))
 
     reconstructed = torch.zeros((num_comparisons, 3, 32, 32))
     for idx, ds_idx in enumerate(choices):
-        reconstructed[idx] = images[ds_idx]
+        reconstructed[idx] = ds[ds_idx][0]
     reconstructed = reconstructed.to("cuda")
     reconstructed = model(reconstructed).detach().cpu()
 

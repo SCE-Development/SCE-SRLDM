@@ -16,7 +16,8 @@ class Discriminator(nn.Module):
         pool_size: int,
     ):
         """
-        Initialize the discriminator
+        Initialize the discriminator. The discriminator will output
+        0 if it is fake and 1 if it is real.
 
         Arguments:
             - input_shape: Tuple[int, int, int] - The input shape, in H,W,C

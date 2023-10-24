@@ -110,7 +110,7 @@ class UpUnit(nn.Module):
         necessary_padding = (h_out_without_padding - desired_h_out) // 2
 
         self.convt = nn.ConvTranspose2d(
-            out_shape[-1],
+            in_shape[-1],
             out_shape[-1],
             kernel_size=kernel_size,
             stride=2,

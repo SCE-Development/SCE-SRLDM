@@ -8,20 +8,32 @@ class VectorQuantizer(nn.Module):
         super(VectorQuantizer, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dimensions = embedding_dim
-
         self.codebook = nn.Embedding(num_embeddings, embedding_dim)
 
 
-    '''
-    foward pass
-
-    INPUTS:
-    z - latent, shape should be (B, C, H, W)
-    '''
+    
     def forward(self, z):
-        
+        '''
+        Args
+            - z: latent, shape should be (B, C, H, W)
+        '''
 
-        return NotImplementedError
+        # convert to (B, H, W, C)
+        z = z.permute(0, 2, 3, 1).contiguous()
+        # Flatten to (B*H*W, C)
+        z_flat = z.view(-1, self.embedding_dimensions)
+
+        # Calculate distances between z and codebook
+
+        distances = torch.sum((z_flat.unsqueeze(1) - self.codebook.weight)**2, dim=2)
+
+        argmin_codewords = torch.argmin(distances, dim=1).unsqueeze(1)
+        min_codewords = torch.zeros((argmin_codewords.shape[0], self.num_embeddings))
+        min_codewords.scatter_(1, argmin_codewords, 1)
+
+        z_quantized = torch.matmul(min_codewords, self.codebook.weight).view(z.shape).permute(0, 3, 1, 2)
+
+        return min_codewords, z_quantized
 
 
 

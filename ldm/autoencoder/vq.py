@@ -8,7 +8,6 @@ class VectorQuantizer(nn.Module):
         super(VectorQuantizer, self).__init__()
         self.num_embeddings = num_embeddings
         self.embedding_dimensions = embedding_dim
-
         self.codebook = nn.Embedding(num_embeddings, embedding_dim)
 
 
@@ -24,9 +23,9 @@ class VectorQuantizer(nn.Module):
         # Flatten to (B*H*W, C)
         z_flat = z.view(-1, self.embedding_dimensions)
 
-        distances = torch.sum(z_flat ** 2, dim=1, keepdim=True) + \
-            torch.sum(self.codebook.weight**2, dim=1) - 2 * \
-            torch.matmul(z_flat, self.codebook.weight.t())
+        # Calculate distances between z and codebook
+
+        distances = torch.sum((z_flat.unsqueeze(1) - self.codebook.weight)**2, dim=2)
 
         argmin_codewords = torch.argmin(distances, dim=1).unsqueeze(1)
         min_codewords = torch.zeros((argmin_codewords.shape[0], self.num_embeddings))

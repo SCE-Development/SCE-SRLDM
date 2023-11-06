@@ -10,6 +10,56 @@ from torchvision.datasets import CIFAR10
 import torchvision.transforms as t
 from utils import get_comparison
 
+def train_l2_Codebook(
+    epochs: int,
+    dl: DataLoader,
+    vqvae: VQVAE,
+    vqvae_optimizer: torch.optim.Optimizer,
+    device: torch.device,
+):
+    """
+    Train the vqvae using reconstruction loss and code book losses.
+
+    Arguments:
+        - epochs: int - the number of epochs to train for
+        - dl: DataLoader - the batched dataloader. Note: the dataloader should have the image
+            tensors (in the format of C,H,W) as the first element
+        - vqvae: VQVAE - the vector quantized variational autoencoder to train
+        - vqvae_optimizer: torch.optim.Optimizer - the optimizer
+        - device: torch.device - the device to train on
+    """
+    mse = torch.nn.MSELoss()
+    vqvae = vqvae.train().to(device)
+
+    for epoch in range(1, epochs + 1):
+        prog = tqdm(dl)
+        prog.set_description_str(f"epoch {epoch}")
+        epoch_mse_loss = 0
+
+        for batch in prog:
+            # take only the image tensors, move them to device
+            batch, *_ = batch
+            batch = batch.to(device)
+
+            # generate samples
+            vqvae_optimizer.zero_grad()
+            reconstructed, codebook_loss = vqvae(batch)
+
+            # optimize vqvae
+            mse_loss = mse(reconstructed, batch) +codebook_loss;
+            mse_loss.backward()
+            vqvae_optimizer.step()
+
+            # log
+            mse_loss = mse_loss.detach().cpu()
+            prog.set_postfix_str(f"mse_loss: {mse_loss:.5f}")
+
+            epoch_mse_loss += mse_loss
+
+        epoch_mse_loss /= len(dl)
+
+        print(f"Epoch mse loss: {epoch_mse_loss:.5f}")
+
 
 def train_l2(
     epochs: int,

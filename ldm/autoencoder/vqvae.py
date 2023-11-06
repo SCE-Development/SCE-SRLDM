@@ -43,7 +43,7 @@ class VQVAE(nn.Module):
     def forward(self, x):
 
         z = self.encoder(x)
-        z_quantized = self.vq(z)
+        z_quantized,min_code, loss = self.vq(z)
         x_hat = self.decoder(z_quantized)
 
-        return NotImplementedError
+        return x_hat,loss

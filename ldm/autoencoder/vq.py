@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import torch.nn.functional as func
 class VectorQuantizer(nn.Module):
 
     def __init__(self, num_embeddings, embedding_dim):
@@ -33,7 +33,11 @@ class VectorQuantizer(nn.Module):
 
         z_quantized = torch.matmul(min_codewords, self.codebook.weight).view(z.shape).permute(0, 3, 1, 2)
 
-        return min_codewords, z_quantized
+        #calculating codebook losses
+        loss = func.mse_loss(z_quantized.detach(),z) + 0.25*func.mse_loss(z_quantized,z.detach())
+
+       
+        return min_codewords, z_quantized,loss
 
 
 

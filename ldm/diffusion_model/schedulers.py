@@ -4,9 +4,6 @@ from abc import abstractmethod
 
 
 class NoiseScheduler(nn.Module):
-    def __init__(self, t: type):
-        super(t, self).__init__()
-
     @abstractmethod
     def noise(self, x: torch.Tensor, step: int):
         """
@@ -16,7 +13,7 @@ class NoiseScheduler(nn.Module):
         Arguments:
             - x: torch.Tensor - the tensor to run the forward
                 diffusion noise process on
-            - step: int - the current step that the forward
+            - step: int - the zero-indexed current step that the forward
                 diffusion noise process is on
         """
 
@@ -38,7 +35,7 @@ class NoiseScheduler(nn.Module):
 
 class ConstantNoiseScheduler(NoiseScheduler):
     def __init__(self, beta: float) -> None:
-        super().__init__(ConstantNoiseScheduler)
+        super(ConstantNoiseScheduler, self).__init__()
         self.register_buffer("beta", torch.tensor(beta))
 
     def noise(self, x: torch.Tensor, step: int) -> torch.Tensor:
@@ -48,9 +45,20 @@ class ConstantNoiseScheduler(NoiseScheduler):
         return self._apply_noise(x, rate=self.beta)
 
 
+class LinearNoiseScheduler(NoiseScheduler):
+    def __init__(self, b1: float, b2: float, total_steps: int) -> None:
+        super(LinearNoiseScheduler, self).__init__()
+        assert total_steps > 1, "There must be more than 1 step"
+        self.register_buffer("increment", torch.tensor((b2 - b1) / (total_steps - 1)))
+        self.register_buffer("b1", torch.tensor(b1))
+
+    def noise(self, x: torch.Tensor, step: int):
+        return self._apply_noise(x, step * self.increment + self.b1)
+
+
 class CosineNoiseScheduler(NoiseScheduler):
-    def __init__(self, t: type):
-        super().__init__(CosineNoiseScheduler)
+    def __init__(self):
+        super(CosineNoiseScheduler, self).__init__()
 
         # TODO - get Vishwesh's cosine noise scheduler here
         pass

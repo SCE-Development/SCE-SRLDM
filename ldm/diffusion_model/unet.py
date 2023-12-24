@@ -12,10 +12,10 @@ class UNet(nn.Module):
         a residual connection, and up sampling layers with cross attention
         """
         super(UNet, self).__init__()
-        pass
 
     def forward(self, zt: torch.Tensor):
         """
         Given an input zt, return zt-1
         """
-        pass
+        # TODO - actually run zt through model
+        return zt

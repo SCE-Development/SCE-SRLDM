@@ -2,3 +2,6 @@
 test.ipynb
 /ldm/autoencoder/__pycache__
 __pycache__/
+.DS_Store
+ldm/.DS_Store
+models/.DS_Store

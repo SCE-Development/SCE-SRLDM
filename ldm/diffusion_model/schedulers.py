@@ -80,7 +80,7 @@ class CosineNoiseScheduler(NoiseScheduler):
         """
         assert step > 0, "step 0 is already computed"
         # Calculate alpha_t
-        alpha_t = math.cos(((math.pi / 2) * step / self.total_steps + self.s) / (1 + self.s))
+        alpha_t = math.cos((math.pi / 2) * ((step / self.total_steps + self.s) / (1 + self.s)))
         alpha_t = alpha_t ** 2
 
         # Store the current alpha_t in prev_alpha_t

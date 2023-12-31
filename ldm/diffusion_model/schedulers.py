@@ -69,7 +69,7 @@ class CosineNoiseScheduler(NoiseScheduler):
         self.register_buffer('prev_alpha_t', torch.zeros(1))
 
         # Calculate alpha_zero
-        alpha_zero = math.cos((math.pi / 2) * (self.s / (1 + self.s)))
+        alpha_zero = torch.cos((math.pi / 2) * (self.s / (1 + self.s)))
         alpha_zero = alpha_zero ** 2
         self.alpha_zero[0] = alpha_zero
         self.prev_alpha_t[0] = alpha_zero
@@ -78,9 +78,8 @@ class CosineNoiseScheduler(NoiseScheduler):
         """
         Calculate alpha_t, alpha_zero, and prev_alpha_t based on the squared cosine function.
         """
-        assert step > 0, "step 0 is already computed"
         # Calculate alpha_t
-        alpha_t = math.cos((math.pi / 2) * ((step / self.total_steps + self.s) / (1 + self.s)))
+        alpha_t = torch.cos((math.pi / 2) * ((step / self.total_steps + self.s) / (1 + self.s)))
         alpha_t = alpha_t ** 2
 
         # Store the current alpha_t in prev_alpha_t
@@ -89,10 +88,13 @@ class CosineNoiseScheduler(NoiseScheduler):
         # Update alpha_t
         self.alpha_t[0] = alpha_t
 
-    def noise(self, x: torch.Tensor, step: int) -> torch.Tensor:
+    def noise(self, x: torch.Tensor, step: int):
         """
         Custom noise scheduler based on the squared cosine function.
         """
+        if step == 0:
+            return 0
+
         # Calculate alpha_t, alpha_zero, and prev_alpha_t
         self.calculate_alphas(step)
 

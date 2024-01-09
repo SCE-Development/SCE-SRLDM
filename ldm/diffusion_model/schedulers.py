@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from abc import abstractmethod
+import math
 
 
 class NoiseScheduler(nn.Module):
@@ -57,11 +58,47 @@ class LinearNoiseScheduler(NoiseScheduler):
 
 
 class CosineNoiseScheduler(NoiseScheduler):
-    def __init__(self):
+    def __init__(self, total_steps: int, s: float) -> None:
         super(CosineNoiseScheduler, self).__init__()
+        self.total_steps = total_steps
+        self.s = s
 
-        # TODO - get Vishwesh's cosine noise scheduler here
-        pass
+        # Register buffers for alpha_t, alpha_zero, and prev_alpha_t
+        self.register_buffer('alpha_t', torch.zeros(1))
+        self.register_buffer('alpha_zero', torch.zeros(1))
+        self.register_buffer('prev_alpha_t', torch.zeros(1))
 
-    def noise(self, x: torch.Tensor, step: int) -> torch.Tensor:
-        pass
+        # Calculate alpha_zero
+        alpha_zero = torch.cos((math.pi / 2) * (self.s / (1 + self.s)))
+        alpha_zero = alpha_zero ** 2
+        self.alpha_zero[0] = alpha_zero
+        self.prev_alpha_t[0] = alpha_zero
+
+    def calculate_alphas(self, step: int) -> None:
+        """
+        Calculate alpha_t, alpha_zero, and prev_alpha_t based on the squared cosine function.
+        """
+        # Calculate alpha_t
+        alpha_t = torch.cos((math.pi / 2) * ((step / self.total_steps + self.s) / (1 + self.s)))
+        alpha_t = alpha_t ** 2
+
+        # Store the current alpha_t in prev_alpha_t
+        self.prev_alpha_t[0] = self.alpha_t[0]
+
+        # Update alpha_t
+        self.alpha_t[0] = alpha_t
+
+    def noise(self, x: torch.Tensor, step: int):
+        """
+        Custom noise scheduler based on the squared cosine function.
+        """
+        if step == 0:
+            return 0
+
+        # Calculate alpha_t, alpha_zero, and prev_alpha_t
+        self.calculate_alphas(step)
+
+        # Calculate alpha using current and previous alpha_t
+        beta = 1 - (self.alpha_t[0] / self.prev_alpha_t[0])
+
+        return self._apply_noise(x, rate=beta)

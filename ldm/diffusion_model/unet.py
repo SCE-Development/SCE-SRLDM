@@ -20,16 +20,14 @@ class UNet(nn.Module):
         self.up = nn.ModuleList()
         
         for i in range(depth):
-            self.down.insert(Downsample(curr_channels))
-            # attention / residual
+            self.down.append(Downsample(curr_channels, curr_channels*2))
             curr_channels *= 2
 
-        self.bottleneck = nn.Linear() # TODO change to something more appropriate
+        self.bottleneck = nn.Conv2d(curr_channels, curr_channels, kernel_size=3, stride = 1, padding=1)
 
         for i in range(depth):
-            self.up.insert(Upsample(curr_channels))
-            # attention /residual
-            curr_channels /= 2
+            self.up.append(Upsample(curr_channels, curr_channels//2))
+            curr_channels //= 2
 
         self.out_conv = nn.Conv2d(64, latent_num_channels, kernel_size=3, stride=1, padding=1)
 
@@ -37,37 +35,38 @@ class UNet(nn.Module):
         """
         Given an input zt, return zt-1
         """
-        # TODO - actually run zt through model
         x = zt.detach().clone()
         h = []
         h.append(x)
 
-        for i, layer in enumerate(self.down):
+        for layer in self.down:
             x = layer(x)
             h.append(x)
 
         x = self.bottleneck(x)
 
-        for i, layer in enumerate(self.up):
-            x = layer(x)
+        for layer in self.up:
             torch.cat((x, h.pop()), dim=1)
+            x = layer(x)
+
+        torch.cat((x, h.pop()), dim=1)
 
         x = self.out_conv(x)
         return x
-
-
-class Downsample(nn.Module):
-    def __init__(self, in_channels, outchannels):
-        super(Downsample, self).__init__()
     
+class Downsample(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(Downsample, self).__init__()
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=2, padding=1)
 
-    def foward(self, x):
-        return "encoded x"
+    def forward(self, x):
+        return self.conv(x)
 
 class Upsample(nn.Module):
-     def __init__(self, in_channels, outchannels):
+    def __init__(self, in_channels, out_channels):
         super(Upsample, self).__init__()
-
-    def forward(self, x, residual):
+        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
     
-        return "decoded x"
+    def forward(self, x):
+        x = nn.functional.interpolate(x, scale_factor=2, mode="nearest")
+        return self.conv(x)

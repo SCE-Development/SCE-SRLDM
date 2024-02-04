@@ -23,7 +23,7 @@ class UNet(nn.Module):
             self.down.append(Downsample(curr_channels, curr_channels*2))
             curr_channels *= 2
 
-        self.bottleneck = nn.Conv2d(curr_channels, curr_channels, kernel_size=3, stride = 1, padding=1)
+        self.bottleneck = nn.Conv2d(curr_channels, curr_channels, kernel_size=3, stride=1, padding=1)
 
         for i in range(depth):
             self.up.append(Upsample(curr_channels, curr_channels//2))
@@ -31,7 +31,7 @@ class UNet(nn.Module):
 
         self.out_conv = nn.Conv2d(64, latent_num_channels, kernel_size=3, stride=1, padding=1)
 
-    def forward(self, zt: torch.Tensor):
+    def forward(self, zt: torch.Tensor, time):
         """
         Given an input zt, return zt-1
         """
@@ -40,14 +40,14 @@ class UNet(nn.Module):
         h.append(x)
 
         for layer in self.down:
-            x = layer(x)
+            x = layer(x, time)
             h.append(x)
 
         x = self.bottleneck(x)
 
         for layer in self.up:
             torch.cat((x, h.pop()), dim=1)
-            x = layer(x)
+            x = layer(x, time)
 
         torch.cat((x, h.pop()), dim=1)
 
@@ -55,18 +55,54 @@ class UNet(nn.Module):
         return x
     
 class Downsample(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_shape: int = 1280):
         super(Downsample, self).__init__()
+
+        self.silu = nn.SiLU()
+        self.group_norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=2, padding=1)
+        
+        self.time_emb_layer = nn.Linear(time_emb_shape, out_channels)
 
-    def forward(self, x):
-        return self.conv(x)
+        self.merged_group_norm = nn.GroupNorm(32, out_channels)
+        self.merged_conv = nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)       
 
+    def forward(self, x: torch.Tensor, time: torch.Tensor):
+        x = self.group_norm(x)
+        x = self.silu(x)
+        x = self.conv(x)
+
+        time_emb = self.time_emb_layer(time)
+        time_emb = self.silu(time_emb)
+
+        # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)
+        x = x + time_emb.unsqueeze(-1).unsqueeze(-1)
+        x = self.merged_group_norm(x)
+        x = self.silu(x)
+        return self.merged_conv(x) 
 class Upsample(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels: int, out_channels: int, time_emb_shape: int = 1280):
         super(Upsample, self).__init__()
+        self.silu = nn.SiLU()
+        self.group_norm = nn.GroupNorm(32, in_channels)
         self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)
+        
+        self.time_emb_layer = nn.Linear(time_emb_shape, out_channels)
+
+        self.merged_group_norm = nn.GroupNorm(32, out_channels)
+        self.merged_conv = nn.Conv2d(in_channels=out_channels, out_channels=out_channels, kernel_size=3, stride=1, padding=1)       
     
-    def forward(self, x):
+    def forward(self, x: torch.Tensor, time: torch.Tensor):
         x = nn.functional.interpolate(x, scale_factor=2, mode="nearest")
-        return self.conv(x)
+        x = self.group_norm(x)
+        x = self.silu(x)
+        x = self.conv(x)
+
+        time_emb = self.time_emb_layer(time)
+        time_emb = self.silu(time_emb)
+
+        # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)
+        x = x + time_emb.unsqueeze(-1).unsqueeze(-1)
+        x = self.merged_group_norm(x)
+        x = self.silu(x)
+        return self.merged_conv(x)

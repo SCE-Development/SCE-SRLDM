@@ -1,49 +1,85 @@
-
-
 # define model architecture here
 
-import torch
+from torch import Tensor
 import torch.nn as nn
 
 from encoder import Encoder
 from vq import VectorQuantizer
+from residual import Residual
 from decoder import Decoder
+from typing import Tuple
 
 
 class VQVAE(nn.Module):
 
-    def __init__(self):
-        
+    def __init__(
+        self,
+        input_shape: Tuple[int, int],
+        n_layers: int = 3,
+        n_hidden: int = 128,
+        n_residuals: int = 3,
+        num_embeddings: int = 512,
+        embedding_dim: int = 128,
+        kernel_size: int = 8,
+    ):
+        """
+        Initializes the Vector-Quantized Variational AutoEncoder module
+
+        Arguments:
+            - input_shape: Tuple[int, int] - the H,W of the input images
+            - n_layers: int - the number of encoder/decoder layers to use
+            - n_hidden: int - the hidden size for encoder/decoder layers to use
+            - n_residuals: int - the number of residuals to use between encoder/decoder and quantization
+            - num_embeddings: int - the number of "codes" for the vector quantizer's codebook
+            - embedding_dim: int - the size of each of the "codes"; should be a divisor of `n_hidden`
+            - kernel_size: int - the size of the kernel to use for convolution/deconvolution
+        """
         super(VQVAE, self).__init__()
 
-        self.encoder = Encoder()
-        self.vq = VectorQuantizer()
-        self.decoder = Decoder()
+        self.encoder = Encoder(
+            input_shape, n_layers=n_layers, n_hidden=n_hidden, kernel_size=kernel_size
+        )
+        self.vq = VectorQuantizer(
+            num_embeddings=num_embeddings, embedding_dim=embedding_dim
+        )
+        self.decoder = Decoder(
+            inp_shape=self.encoder.output_shape[1:],
+            n_hidden=n_hidden,
+            n_layers=n_layers,
+            kernel_size=kernel_size,
+        )
 
-        # TODO: missing a bunch of stuff here
+        self.residual_enc = Residual(n_residuals, n_hidden, kernel_size)
+        self.residual_dec = Residual(n_residuals, n_hidden, kernel_size)
 
+    def encode(self, x: Tensor) -> Tensor:
+        z = self.residual_enc(self.encoder(x))
 
-    def encode(self, x):
-        z = self.encoder(x)
+        return z
 
-        return NotImplementedError
-    
-
-    def quantize(self, z):
+    def quantize(self, z: Tensor) -> Tensor:
         z_quantized = self.vq(z)
 
-        return NotImplementedError
-    
+        return z_quantized
 
-    def decode(self, z):
-        x_hat = self.decoder(z)
-        
-        return NotImplementedError
-    
-    def forward(self, x):
+    def decode(self, z: Tensor) -> Tensor:
+        x_hat, _ = self.decoder(self.residual_dec(z))
 
-        z = self.encoder(x)
-        z_quantized,min_code, loss = self.vq(z)
-        x_hat = self.decoder(z_quantized)
+        return x_hat
 
-        return x_hat,loss
+    def forward(self, x: Tensor) -> Tuple[Tensor, Tensor]:
+        """
+        Call the VQVAE on the provided input.
+
+        Arguments:
+            x: Tensor - input tensor in (B,C,H,W) format
+
+        Returns:
+            Tuple[Tensor, Tensor] - a tuple containing the reconstructed image and the codebook loss
+        """
+        z = self.residual_enc(self.encoder(x))
+
+        z_quantized, loss = self.vq(z)
+        x_hat = self.decoder(self.residual_dec(z_quantized))
+
+        return x_hat, loss

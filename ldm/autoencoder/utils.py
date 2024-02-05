@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 def to_image(x: torch.Tensor):
     return Image.fromarray(
-        (torch.clamp(x, 0, 1) * 255)
+        ((torch.clamp(x, -0.5, 0.5) + 0.5) * 255)
         .permute(1, 2, 0)
         .contiguous()
         .to(torch.uint8)

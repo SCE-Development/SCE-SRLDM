@@ -2,7 +2,7 @@ from typing import Tuple
 import torch
 import torch.nn as nn
 
-from units import UpUnit, ConvLayers
+from units import UpUnit
 
 
 class Decoder(nn.Module):
@@ -28,18 +28,19 @@ class Decoder(nn.Module):
         cur_shape = inp_shape
         cur_channels = n_hidden
         # add upconv layers
+        self.units = nn.ModuleList()
         for i in range(n_layers):
             next_channels = max(cur_channels // 2, 3)
             if i == n_layers - 1:
                 next_channels = 3
-            self.add_module(
-                f"unit_{i}",
+            self.units.add_module(
+                f"{i}",
                 UpUnit(cur_shape, cur_channels, next_channels, kernel_size=kernel_size),
             )
             cur_channels = next_channels
             cur_shape = (cur_shape[0] * 2, cur_shape[1] * 2)
-        self.add_module(
-            f"postconv",
+        self.units.add_module(
+            f"{i+1}",
             nn.Conv2d(3, 3, kernel_size=kernel_size, stride=1, padding="same"),
         )
 
@@ -47,7 +48,7 @@ class Decoder(nn.Module):
         """
         Call the model on B,C,H,W input
         """
-        for module in self.children():
-            x = module(x)
+        for unit in self.units:
+            x = unit(x)
 
         return x

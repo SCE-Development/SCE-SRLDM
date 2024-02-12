@@ -3,37 +3,6 @@ import torch
 import torch.nn as nn
 
 
-class ConvLayers(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int) -> None:
-        """
-        Initialize the convolution layers.
-
-        Arguments:
-            - in_channels: int - the expected number of channels in the input
-            - out_channels: int - the expected number of channels to output
-            - kernel_size: int - the size of the kernel to use
-        """
-        super(ConvLayers, self).__init__()
-
-        self.convs = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride=1, padding="same"),
-            nn.GELU(),
-            nn.BatchNorm2d(out_channels),
-            nn.Conv2d(
-                out_channels, out_channels, kernel_size, stride=1, padding="same"
-            ),
-            nn.GELU(),
-        )
-
-    def forward(self, x: torch.Tensor):
-        """
-        Call the model on B,C,H,W input
-        """
-        x = self.convs(x)
-
-        return x
-
-
 class DownUnit(nn.Module):
     """
     Down Unit; Halves the H,W of an input
@@ -69,14 +38,15 @@ class DownUnit(nn.Module):
         necessary_padding = (desired_height - height_without_padding) * 2 // stride
 
         self.unit = nn.Sequential(
-            ConvLayers(in_channels, out_channels, kernel_size),
             nn.Conv2d(
-                out_channels,
+                in_channels,
                 out_channels,
                 kernel_size=kernel_size,
                 stride=2,
                 padding=necessary_padding,
             ),
+            nn.GELU(),
+            nn.BatchNorm2d(out_channels),
         )
 
     def forward(self, x: torch.Tensor):

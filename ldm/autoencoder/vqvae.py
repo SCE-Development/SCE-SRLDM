@@ -21,6 +21,7 @@ class VQVAE(nn.Module):
         num_embeddings: int = 512,
         embedding_dim: int = 128,
         kernel_size: int = 8,
+        residual_multiplier: float = 0.25,
     ):
         """
         Initializes the Vector-Quantized Variational AutoEncoder module
@@ -33,6 +34,7 @@ class VQVAE(nn.Module):
             - num_embeddings: int - the number of "codes" for the vector quantizer's codebook
             - embedding_dim: int - the size of each of the "codes"; should be a divisor of `n_hidden`
             - kernel_size: int - the size of the kernel to use for convolution/deconvolution
+            - residual_multiplier: float - the multiplier for the residual hiddens
         """
         super(VQVAE, self).__init__()
 
@@ -49,8 +51,15 @@ class VQVAE(nn.Module):
             kernel_size=kernel_size,
         )
 
-        self.residual_enc = Residual(n_residuals, n_hidden, kernel_size)
-        self.residual_dec = Residual(n_residuals, n_hidden, kernel_size)
+        self.residual_enc = Residual(
+            n_residuals, n_hidden, kernel_size, residual_multiplier
+        )
+        self.residual_dec = Residual(
+            n_residuals, n_hidden, kernel_size, residual_multiplier
+        )
+
+        self.to_emb = nn.Conv2d(n_hidden, embedding_dim, kernel_size, 1, "same")
+        self.from_emb = nn.Conv2d(embedding_dim, n_hidden, kernel_size, 1, "same")
 
     def encode(self, x: Tensor) -> Tensor:
         z = self.residual_enc(self.encoder(x))
@@ -77,9 +86,9 @@ class VQVAE(nn.Module):
         Returns:
             Tuple[Tensor, Tensor] - a tuple containing the reconstructed image and the codebook loss
         """
-        z = self.residual_enc(self.encoder(x))
+        z = self.to_emb(self.residual_enc(self.encoder(x)))
 
         z_quantized, loss = self.vq(z)
-        x_hat = self.decoder(self.residual_dec(z_quantized))
+        x_hat = self.decoder(self.residual_dec(self.from_emb(z_quantized)))
 
         return x_hat, loss

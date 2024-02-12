@@ -28,10 +28,12 @@ class Encoder(nn.Module):
 
         cur_channels = 3
         cur_shape = inp_shape
+        self.units = nn.ModuleList()
+
         for i in range(n_layers):
             next_channels = max(cur_channels * 2, n_hidden // (2 ** (n_layers - i - 1)))
-            self.add_module(
-                f"unit_{i}",
+            self.units.add_module(
+                f"{i}",
                 DownUnit(
                     cur_shape,
                     cur_channels,
@@ -48,7 +50,6 @@ class Encoder(nn.Module):
         """
         Call the model on B,C,H,W input
         """
-        for module in self.children():
-            x = module(x)
-
+        for unit in self.units:
+            x = unit(x)
         return x

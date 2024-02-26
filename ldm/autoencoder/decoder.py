@@ -39,10 +39,7 @@ class Decoder(nn.Module):
             )
             cur_channels = next_channels
             cur_shape = (cur_shape[0] * 2, cur_shape[1] * 2)
-        self.units.add_module(
-            f"{i+1}",
-            nn.Conv2d(3, 3, kernel_size=kernel_size, stride=1, padding="same"),
-        )
+        self.head = nn.Conv2d(3, 3, kernel_size=kernel_size, stride=1, padding="same")
 
     def forward(self, x: torch.Tensor):
         """
@@ -51,4 +48,4 @@ class Decoder(nn.Module):
         for unit in self.units:
             x = unit(x)
 
-        return x
+        return self.head(x)

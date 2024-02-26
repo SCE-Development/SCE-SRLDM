@@ -109,8 +109,8 @@ def train(
             tensors (in the format of C,H,W) as the first element
         - vqvae: VQVAE - the vector quantized variational autoencoder to train
         - vqvae_optimizer: torch.optim.Optimizer - the optimizer
-        - discriminator: Discriminator - the patch-based discriminator that outputs `1`s if an image
-            is real and `0`s if it is fake
+        - discriminator: Discriminator - the patch-based discriminator that outputs logits that whose sigmoid
+            is `1`s if an image is real and `0`s if it is fake
         - discriminator_optimizer: torch.optim.Optimizer - the optimizer for the discriminator
         - device: torch.device - the device to train on
         - batch_fn: Callable - a function that takes the current batch and returns the Tensor version of it.
@@ -134,7 +134,7 @@ def train(
         return lambda_val
 
     # loss functions
-    bce = torch.nn.BCELoss()
+    bce = torch.nn.BCEWithLogitsLoss()
     lper = lper.to(device)
     l1 = torch.nn.L1Loss()
 
@@ -156,6 +156,7 @@ def train(
         epoch_vqvae_loss = 0
         epoch_reconstruction_loss = 0
         epoch_gan_loss = 0
+        epoch_codebook_loss = 0
 
         for batch in prog:
             # take only the image tensors, move them to device
@@ -211,6 +212,7 @@ def train(
             epoch_vqvae_loss += vqvae_loss.detach().cpu()
             epoch_reconstruction_loss += rec_loss.detach().cpu()
             epoch_gan_loss += gan_loss.detach().cpu()
+            epoch_codebook_loss += codebook_loss.detach().cpu()
 
         # average before logging
         epoch_disc_loss /= len(dl)
@@ -219,6 +221,7 @@ def train(
         epoch_vqvae_loss /= len(dl)
         epoch_reconstruction_loss /= len(dl)
         epoch_gan_loss /= len(dl)
+        epoch_codebook_loss /= len(dl)
 
         # write to tensorboard
         writer.add_scalar("discriminator/loss", epoch_disc_loss)
@@ -230,12 +233,13 @@ def train(
         writer.add_scalar("vqvae/loss", epoch_vqvae_loss)
         writer.add_scalar("vqvae/reconstruction_loss", epoch_reconstruction_loss)
         writer.add_scalar("vqvae/gan_loss", epoch_gan_loss)
+        writer.add_scalar("vqvae/codebook_loss", epoch_codebook_loss)
         writer.add_scalar("vqvae/lr", vqvae_optimizer.param_groups[-1]["lr"])
 
         # log to console as well
         print(
             f"Epoch d/loss: {epoch_disc_loss:.5f}, d/fake: {epoch_disc_fake_loss:.5f}, d/real: {epoch_disc_real_loss:.5f}, "
-            f"v/loss: {epoch_vqvae_loss:.5f}, v/rec: {epoch_reconstruction_loss:.5f}, v/gan: {epoch_gan_loss:.5f}"
+            f"v/loss: {epoch_vqvae_loss:.5f}, v/rec: {epoch_reconstruction_loss:.5f}, v/gan: {epoch_gan_loss:.5f}, v/code: {epoch_codebook_loss:.5f}"
         )
 
         # save best model as we train

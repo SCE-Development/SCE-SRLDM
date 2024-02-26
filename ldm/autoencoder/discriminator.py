@@ -19,7 +19,7 @@ class Discriminator(nn.Module):
     ):
         """
         Initialize the patch-based discriminator. For every patch in the input
-        image, the discriminator will output in the continuous range `[0, 1]`
+        image, the discriminator will output a number whose sigmoid will be in the continuous range
         where numbers closer to `0` mean fake and numbers closer to `1` mean real.
 
         Arguments:
@@ -39,7 +39,7 @@ class Discriminator(nn.Module):
 
         # head
         self.head = nn.Sequential(
-            nn.Conv2d(n_hidden, 1, kernel_size, 1, padding="same"), nn.Sigmoid()
+            nn.Conv2d(n_hidden, 1, kernel_size, 1, padding="same")
         )
 
     def forward(self, x: torch.Tensor):

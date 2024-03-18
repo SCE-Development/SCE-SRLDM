@@ -1,5 +1,5 @@
 # define model architecture here
-
+from typing import Union, List
 from torch import Tensor
 import torch.nn as nn
 
@@ -11,7 +11,6 @@ from typing import Tuple
 
 
 class VQVAE(nn.Module):
-
     def __init__(
         self,
         input_shape: Tuple[int, int],
@@ -22,6 +21,7 @@ class VQVAE(nn.Module):
         embedding_dim: int = 128,
         kernel_size: int = 8,
         residual_multiplier: float = 0.25,
+        scale_factor: Union[int, List[int]] = 2,
     ):
         """
         Initializes the Vector-Quantized Variational AutoEncoder module
@@ -38,17 +38,28 @@ class VQVAE(nn.Module):
         """
         super(VQVAE, self).__init__()
 
+        reverse_scale_factor = scale_factor
+        if type(scale_factor) == list:
+            reverse_scale_factor = scale_factor.copy()
+            reverse_scale_factor.reverse()
+
         self.encoder = Encoder(
-            input_shape, n_layers=n_layers, n_hidden=n_hidden, kernel_size=kernel_size
+            input_shape,
+            n_layers=n_layers,
+            n_hidden=n_hidden,
+            kernel_size=kernel_size,
+            downsample_factor=scale_factor,
         )
         self.vq = VectorQuantizer(
-            num_embeddings=num_embeddings, embedding_dim=embedding_dim
+            num_embeddings=num_embeddings,
+            embedding_dim=embedding_dim,
         )
         self.decoder = Decoder(
             inp_shape=self.encoder.output_shape[1:],
             n_hidden=n_hidden,
             n_layers=n_layers,
             kernel_size=kernel_size,
+            upsample_factor=reverse_scale_factor,
         )
 
         self.residual_enc = Residual(

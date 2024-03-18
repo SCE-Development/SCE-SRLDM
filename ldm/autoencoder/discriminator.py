@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 from typing import Tuple
-import numpy as np
 
 from encoder import Encoder
 from residual import Residual
@@ -38,9 +37,7 @@ class Discriminator(nn.Module):
         self.residual = Residual(n_res_layers, n_hidden, kernel_size, res_multiplier)
 
         # head
-        self.head = nn.Sequential(
-            nn.Conv2d(n_hidden, 1, kernel_size, 1, padding="same")
-        )
+        self.head = nn.Conv2d(n_hidden, 1, kernel_size, 1, padding="same")
 
     def forward(self, x: torch.Tensor):
         """

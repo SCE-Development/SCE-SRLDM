@@ -8,16 +8,17 @@ from torch.utils import tensorboard
 import lpips
 
 
-def train_l2_Codebook(
+def train_no_discriminator(
     epochs: int,
     dl: DataLoader,
     vqvae: VQVAE,
     vqvae_optimizer: torch.optim.Optimizer,
     device: torch.device,
     batch_fn: Callable[[Any], torch.Tensor] = lambda b: b,
+    lper: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = lpips.LPIPS(net="vgg"),
 ):
     """
-    Train the vqvae using l2 reconstruction loss and code book losses.
+    Train the vqvae using purely reconstruction loss and code book losses.
 
     Arguments:
         - epochs: int - the number of epochs to train for
@@ -29,8 +30,11 @@ def train_l2_Codebook(
         - batch_fn: Callable - a function that takes the current batch and returns the Tensor version of it.
             For most applications, an identity function would suffice. If the dataset is in HuggingFace datasets
             format, then this callback becomes useful
+        - lper: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] - perceptual loss to use; defaults to using LPIPS
+            from https://arxiv.org/abs/1801.03924 with vgg as the net.
     """
     mse = torch.nn.MSELoss()
+    lper = lper.to(device)
     vqvae = vqvae.train().to(device)
 
     best = float("inf")
@@ -54,15 +58,21 @@ def train_l2_Codebook(
 
             # optimize vqvae
             mse_loss = mse(reconstructed, batch)
-            full_loss = mse_loss + codebook_loss
+            rec_loss = (
+                lper(torch.clip(reconstructed * 2, -1, 1), torch.clip(batch * 2, -1, 1))
+                .mean()
+                .squeeze()
+            )
+            full_loss = mse_loss + codebook_loss + rec_loss
             full_loss.backward()
             vqvae_optimizer.step()
 
             # log
             mse_loss = mse_loss.detach().cpu()
             codebook_loss = codebook_loss.detach().cpu()
+            rec_loss = rec_loss.detach().cpu()
             prog.set_postfix_str(
-                f"mse_loss: {mse_loss:.5f}, codebook loss: {codebook_loss:.5f}"
+                f"mse_loss: {mse_loss:.5f}, codebook loss: {codebook_loss:.5f}, rec_loss: {rec_loss:.5f}"
             )
 
             epoch_loss += full_loss.detach().cpu()
@@ -83,8 +93,10 @@ def train_l2_Codebook(
         # save best
         if epoch_loss < best:
             best = epoch_loss
-            torch.save(vqvae.state_dict(), "best.pt")
-            torch.save(vqvae_optimizer.state_dict(), "best_optim.pt")
+            torch.save(vqvae.state_dict(), "best_vqvae.pt")
+            torch.save(vqvae_optimizer.state_dict(), "best_vqvae_optim.pt")
+        torch.save(vqvae.state_dict(), "latest_vqvae.pt")
+        torch.save(vqvae_optimizer.state_dict(), "latest_vqvae_optim.pt")
 
 
 def train(
@@ -98,6 +110,8 @@ def train(
     batch_fn: Callable[[Any], torch.Tensor] = lambda b: b,
     lper: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = lpips.LPIPS(net="vgg"),
     gamma: float = 1e-6,
+    discriminator_start_epoch: int = 80,
+    disc_weight: float = 0.8,
 ):
     """
     Train the vqvae using gan-like perceptual training, as proposed by https://arxiv.org/pdf/2012.09841.pdf and used by Stable
@@ -119,6 +133,8 @@ def train(
         - lper: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] - perceptual loss to use; defaults to using LPIPS
             from https://arxiv.org/abs/1801.03924 with vgg as the net.
         - gamma: float - small value to add to divisors to prevent division by 0
+        - discriminator_start_epoch: int - when to start optimizing the vqvae using the discriminator as well as the perceptual loss
+        - disc_weight: float - an extra multiplier to multiply the vqvae gan loss by (in addition to the adaptive lambda term)
     """
 
     def calculate_lambda(lrec_val, lgan_val):
@@ -176,12 +192,17 @@ def train(
             rec_loss += lper(
                 torch.clip(reconstructed * 2, -1, 1), torch.clip(batch * 2, -1, 1)
             ).mean()
-            rec_loss = rec_loss.flatten()[0]
+            rec_loss = rec_loss.flatten().squeeze()
             # adaptive lambda weight for gan loss term
             gan_loss = bce(false_preds, torch.ones_like(false_preds).to(device))
             lambda_val = calculate_lambda(rec_loss, gan_loss)
             # sum everything and backprop
-            vqvae_loss = rec_loss + codebook_loss + lambda_val * gan_loss
+            if epoch >= discriminator_start_epoch:
+                vqvae_loss = (
+                    rec_loss + codebook_loss + disc_weight * lambda_val * gan_loss
+                )
+            else:
+                vqvae_loss = rec_loss + codebook_loss
             vqvae_loss.backward()
             vqvae_optimizer.step()
 
@@ -224,17 +245,17 @@ def train(
         epoch_codebook_loss /= len(dl)
 
         # write to tensorboard
-        writer.add_scalar("discriminator/loss", epoch_disc_loss)
-        writer.add_scalar("discriminator/fake_loss", epoch_disc_fake_loss)
-        writer.add_scalar("discriminator/real_loss", epoch_disc_real_loss)
+        writer.add_scalar("discriminator/loss", epoch_disc_loss, epoch)
+        writer.add_scalar("discriminator/fake_loss", epoch_disc_fake_loss, epoch)
+        writer.add_scalar("discriminator/real_loss", epoch_disc_real_loss, epoch)
         writer.add_scalar(
-            "discriminator/lr", discriminator_optimizer.param_groups[-1]["lr"]
+            "discriminator/lr", discriminator_optimizer.param_groups[-1]["lr"], epoch
         )
-        writer.add_scalar("vqvae/loss", epoch_vqvae_loss)
-        writer.add_scalar("vqvae/reconstruction_loss", epoch_reconstruction_loss)
-        writer.add_scalar("vqvae/gan_loss", epoch_gan_loss)
-        writer.add_scalar("vqvae/codebook_loss", epoch_codebook_loss)
-        writer.add_scalar("vqvae/lr", vqvae_optimizer.param_groups[-1]["lr"])
+        writer.add_scalar("vqvae/loss", epoch_vqvae_loss, epoch)
+        writer.add_scalar("vqvae/reconstruction_loss", epoch_reconstruction_loss, epoch)
+        writer.add_scalar("vqvae/gan_loss", epoch_gan_loss, epoch)
+        writer.add_scalar("vqvae/codebook_loss", epoch_codebook_loss, epoch)
+        writer.add_scalar("vqvae/lr", vqvae_optimizer.param_groups[-1]["lr"], epoch)
 
         # log to console as well
         print(
@@ -248,3 +269,8 @@ def train(
             torch.save(vqvae_optimizer.state_dict(), "best_vqvae_optim.pt")
             torch.save(discriminator.state_dict(), "best_disc.pt")
             torch.save(discriminator_optimizer.state_dict(), "best_disc_optim.pt")
+
+        torch.save(vqvae.state_dict(), "latest_vqvae.pt")
+        torch.save(vqvae_optimizer.state_dict(), "latest_vqvae_optim.pt")
+        torch.save(discriminator.state_dict(), "latest_disc.pt")
+        torch.save(discriminator_optimizer.state_dict(), "latest_disc_optim.pt")

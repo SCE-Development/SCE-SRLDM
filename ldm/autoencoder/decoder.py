@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union, List
 import torch
 import torch.nn as nn
 
@@ -12,6 +12,7 @@ class Decoder(nn.Module):
         n_layers: int,
         n_hidden: int,
         kernel_size: int,
+        upsample_factor: Union[int, List[int]] = 2,
     ) -> None:
         """
         Initialize the decoder
@@ -25,6 +26,9 @@ class Decoder(nn.Module):
         """
         super(Decoder, self).__init__()
 
+        if type(upsample_factor) == int:
+            upsample_factor = [upsample_factor] * n_layers
+
         cur_shape = inp_shape
         cur_channels = n_hidden
         # add upconv layers
@@ -35,10 +39,19 @@ class Decoder(nn.Module):
                 next_channels = 3
             self.units.add_module(
                 f"{i}",
-                UpUnit(cur_shape, cur_channels, next_channels, kernel_size=kernel_size),
+                UpUnit(
+                    cur_shape,
+                    cur_channels,
+                    next_channels,
+                    kernel_size=kernel_size,
+                    upscale_factor=upsample_factor[i],
+                ),
             )
             cur_channels = next_channels
-            cur_shape = (cur_shape[0] * 2, cur_shape[1] * 2)
+            cur_shape = (
+                cur_shape[0] * upsample_factor[i],
+                cur_shape[1] * upsample_factor[i],
+            )
         self.head = nn.Conv2d(3, 3, kernel_size=kernel_size, stride=1, padding="same")
 
     def forward(self, x: torch.Tensor):

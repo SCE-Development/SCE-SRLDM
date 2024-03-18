@@ -22,6 +22,7 @@ def get_comparison(
     ds: Dataset,
     model: torch.nn.Module,
     batch_fn: Callable[[Any], torch.Tensor],
+    device: str,
 ):
     """
     Get comparisons between real images and generated images
@@ -33,6 +34,7 @@ def get_comparison(
         - model: torch.nn.Module - an autoencoder
         - batch_fn:
     """
+    model.to(device)
     choices = random.sample(list(range(len(ds))), num_comparisons)
 
     real_images = []
@@ -43,7 +45,7 @@ def get_comparison(
     for idx, ds_idx in enumerate(choices):
         reconstructed[idx] = batch_fn(ds[ds_idx])
     with torch.no_grad():
-        reconstructed = reconstructed.to("cuda")
+        reconstructed = reconstructed.to(device)
         reconstructed, _ = model(reconstructed)
         reconstructed = reconstructed.detach().cpu()
 

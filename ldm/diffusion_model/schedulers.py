@@ -17,7 +17,7 @@ class NoiseScheduler(nn.Module):
                 diffusion noise process is on
         """
 
-    def _apply_noise(self, x: torch.Tensor, rate: torch.Tensor) -> torch.Tensor:
+    def _apply_noise(self, x: torch.Tensor, noise, rate: torch.Tensor) -> torch.Tensor:
         """
         q(xt|xt-1) := N (xt; sqrt(1 - βt)xt-1, βtI)
 
@@ -29,7 +29,7 @@ class NoiseScheduler(nn.Module):
         """
         # technically it should be elementwise, but we can basically
         # do it with U(sqrt(1-Bt)xt-1) + N(0, BtI)
-        xt = torch.sqrt(1 - rate) * x + torch.normal(0, rate, x.shape)
+        xt = torch.sqrt(1 - rate) * x + torch.sqrt(rate)*noise
         return xt
 
 
@@ -52,8 +52,8 @@ class LinearNoiseScheduler(NoiseScheduler):
         self.register_buffer("increment", torch.tensor((b2 - b1) / (total_steps - 1)))
         self.register_buffer("b1", torch.tensor(b1))
 
-    def noise(self, x: torch.Tensor, step: int):
-        return self._apply_noise(x, step * self.increment + self.b1)
+    def noise(self, x: torch.Tensor, noise,  time_steps: torch.Tensor):
+        return self._apply_noise(x, noise, time_steps.view(-1, 1, 1, 1) * self.increment + self.b1)
 
 
 class CosineNoiseScheduler(NoiseScheduler):

@@ -23,7 +23,7 @@ class UNet(nn.Module):
         curr_channels = channels
 
         self.pre_conv = nn.Conv2d(
-            latent_num_channels,
+            2*latent_num_channels,
             channels,
             kernel_size=kernel_size,
             padding="same"
@@ -77,7 +77,7 @@ class UNet(nn.Module):
             curr_channels //= 2
 
         self.out_conv = nn.Conv2d(
-            channels,
+            channels + 2*latent_num_channels,
             latent_num_channels,
             kernel_size=kernel_size,
             padding="same"
@@ -90,22 +90,28 @@ class UNet(nn.Module):
         x = zt.detach().clone()
         h = []
         h.append(x)
+        print(x.shape)
         x = self.pre_conv(x)
-
+        print(x.shape)
         for layer in self.down:
             
             x = layer(x, time)
+            print(x.shape)
             h.append(x)
 
         x = self.bottleneck(x)
+        print(x.shape)
 
         for layer in self.up:
-            torch.cat((x, h.pop()), dim=1)
+            x = torch.cat((x, h.pop()), dim=1)
+            print(f"size: {x.shape}")
             x = layer(x, time)
+            print(x.shape)
 
-        torch.cat((x, h.pop()), dim=1)
+        x = torch.cat((x, h.pop()), dim=1)
 
         x = self.out_conv(x)
+        print(x.shape)
         return x
     
 class Downsample(nn.Module):
@@ -119,14 +125,6 @@ class Downsample(nn.Module):
     ):
         super(Downsample, self).__init__()
 
-        in_num_groups = 32
-        while out_channels % in_num_groups != 0:
-            in_num_groups //= 2
-        
-        out_num_groups = 32
-        while out_channels % out_num_groups != 0:
-            out_num_groups //= 2
-
         stride = 2
         out_shape = shape //2
         padding = math.ceil(((out_shape-1)*stride - shape + kernel_size)/2)
@@ -139,8 +137,7 @@ class Downsample(nn.Module):
             padding=padding
         )
         self.silu = nn.SiLU()
-        self.group_norm = nn.GroupNorm(
-            in_num_groups,
+        self.batch_norm = nn.BatchNorm2d(
             out_channels
         )
         
@@ -155,8 +152,7 @@ class Downsample(nn.Module):
             padding="same"
         )
         
-        self.merged_group_norm = nn.GroupNorm(
-            out_num_groups,
+        self.merged_batch_norm = nn.BatchNorm2d(
             out_channels
         )
             
@@ -164,7 +160,7 @@ class Downsample(nn.Module):
     def forward(self, x: torch.Tensor, time: torch.Tensor):
         x = self.conv(x)
         x = self.silu(x)
-        x = self.group_norm(x)
+        x = self.batch_norm(x)
 
         time_emb = self.time_emb_layer(time)
         time_emb = self.silu(time_emb)
@@ -174,7 +170,7 @@ class Downsample(nn.Module):
         
         x = self.merged_conv(x)
         x = self.silu(x)
-        return self.merged_group_norm(x)
+        return self.merged_batch_norm(x)
     
 class Upsample(nn.Module):
     def __init__(
@@ -186,23 +182,14 @@ class Upsample(nn.Module):
     ):
         super(Upsample, self).__init__()
 
-        in_num_groups = 32
-        while out_channels % in_num_groups != 0:
-            in_num_groups //= 2
-        
-        out_num_groups = 32
-        while out_channels % out_num_groups != 0:
-            out_num_groups //= 2
-        
         self.conv = nn.Conv2d(
-            in_channels=in_channels,
+            in_channels=2*in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
             padding="same"
         )
         self.silu = nn.SiLU()
-        self.group_norm = nn.GroupNorm(
-            in_num_groups,
+        self.batch_norm = nn.BatchNorm2d(
             out_channels
         )
 
@@ -217,8 +204,7 @@ class Upsample(nn.Module):
             kernel_size=kernel_size,
             padding="same"
         )       
-        self.merged_group_norm = nn.GroupNorm(
-            out_num_groups,
+        self.merged_batch_norm = nn.BatchNorm2d(
             out_channels
         )
         
@@ -226,7 +212,7 @@ class Upsample(nn.Module):
         x = nn.functional.interpolate(x, scale_factor=2, mode="nearest")
         x = self.conv(x)
         x = self.silu(x)
-        x = self.group_norm(x)
+        x = self.batch_norm(x)
 
         time_emb = self.time_emb_layer(time)
         time_emb = self.silu(time_emb)
@@ -235,4 +221,4 @@ class Upsample(nn.Module):
         x = x + time_emb.unsqueeze(-1).unsqueeze(-1)
         x = self.merged_conv(x)
         x = self.silu(x)
-        return self.merged_group_norm(x)
+        return self.merged_batch_norm(x)

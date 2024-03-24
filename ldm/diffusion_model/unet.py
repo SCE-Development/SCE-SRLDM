@@ -11,7 +11,8 @@ class UNet(nn.Module):
         channels: int,
         bottleneck_channels: int,
         kernel_size: int,
-        depth: int
+        depth: int,
+        num_time_steps: int,
     ) -> None:
         """
         The UNet from stable diffusion responsible for denoising the input
@@ -38,7 +39,8 @@ class UNet(nn.Module):
                     shape,
                     curr_channels,
                     curr_channels*2,
-                    kernel_size
+                    kernel_size,
+                    num_time_steps
                 )
             )
 
@@ -71,7 +73,8 @@ class UNet(nn.Module):
                 Upsample(
                     curr_channels,
                     curr_channels//2,
-                    kernel_size
+                    kernel_size,
+                    num_time_steps,
                 )
             )
             curr_channels //= 2
@@ -90,28 +93,21 @@ class UNet(nn.Module):
         x = zt.detach().clone()
         h = []
         h.append(x)
-        print(x.shape)
         x = self.pre_conv(x)
-        print(x.shape)
         for layer in self.down:
             
             x = layer(x, time)
-            print(x.shape)
             h.append(x)
 
         x = self.bottleneck(x)
-        print(x.shape)
 
         for layer in self.up:
             x = torch.cat((x, h.pop()), dim=1)
-            print(f"size: {x.shape}")
             x = layer(x, time)
-            print(x.shape)
 
         x = torch.cat((x, h.pop()), dim=1)
 
         x = self.out_conv(x)
-        print(x.shape)
         return x
     
 class Downsample(nn.Module):
@@ -121,13 +117,15 @@ class Downsample(nn.Module):
             in_channels: int,
             out_channels: int,
             kernel_size: int,
-            time_emb_shape: int = 1280
+            num_time_steps: int,
     ):
         super(Downsample, self).__init__()
 
         stride = 2
         out_shape = shape //2
         padding = math.ceil(((out_shape-1)*stride - shape + kernel_size)/2)
+
+        self.num_time_steps = num_time_steps
         
         self.conv = nn.Conv2d(
             in_channels=in_channels,
@@ -142,7 +140,7 @@ class Downsample(nn.Module):
         )
         
         self.time_emb_layer = nn.Linear(
-            time_emb_shape,
+            1,
             out_channels
         )
         self.merged_conv = nn.Conv2d(
@@ -161,8 +159,7 @@ class Downsample(nn.Module):
         x = self.conv(x)
         x = self.silu(x)
         x = self.batch_norm(x)
-
-        time_emb = self.time_emb_layer(time)
+        time_emb = self.time_emb_layer(time.unsqueeze(-1)/self.num_time_steps)
         time_emb = self.silu(time_emb)
 
         # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)
@@ -178,9 +175,11 @@ class Upsample(nn.Module):
             in_channels: int,
             out_channels: int,
             kernel_size: int,
-            time_emb_shape: int = 1280
+            num_time_steps: int,
     ):
         super(Upsample, self).__init__()
+
+        self.num_time_steps = num_time_steps
 
         self.conv = nn.Conv2d(
             in_channels=2*in_channels,
@@ -194,7 +193,7 @@ class Upsample(nn.Module):
         )
 
         self.time_emb_layer = nn.Linear(
-            time_emb_shape,
+            1,
             out_channels
         )
 
@@ -214,7 +213,7 @@ class Upsample(nn.Module):
         x = self.silu(x)
         x = self.batch_norm(x)
 
-        time_emb = self.time_emb_layer(time)
+        time_emb = self.time_emb_layer(time.unsqueeze(-1)/self.num_time_steps)
         time_emb = self.silu(time_emb)
 
         # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)

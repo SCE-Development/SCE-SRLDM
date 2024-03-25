@@ -139,9 +139,9 @@ class Downsample(nn.Module):
             out_channels
         )
         
-        self.time_emb_layer = nn.Linear(
-            1,
-            out_channels
+        self.time_emb_layer = nn.Embedding(
+            num_embeddings=num_time_steps,
+            embedding_dim=out_channels
         )
         self.merged_conv = nn.Conv2d(
             in_channels=out_channels,
@@ -159,12 +159,13 @@ class Downsample(nn.Module):
         x = self.conv(x)
         x = self.silu(x)
         x = self.batch_norm(x)
-        time_emb = self.time_emb_layer(time.unsqueeze(-1)/self.num_time_steps)
+
+        time_emb = self.time_emb_layer(time).unsqueeze(-1).unsqueeze(-1)
         time_emb = self.silu(time_emb)
 
         # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)
-        x = x + time_emb.unsqueeze(-1).unsqueeze(-1)
-        
+        x = x + time_emb
+
         x = self.merged_conv(x)
         x = self.silu(x)
         return self.merged_batch_norm(x)
@@ -192,9 +193,9 @@ class Upsample(nn.Module):
             out_channels
         )
 
-        self.time_emb_layer = nn.Linear(
-            1,
-            out_channels
+        self.time_emb_layer = nn.Embedding(
+            num_embeddings=num_time_steps,
+            embedding_dim=out_channels
         )
 
         self.merged_conv = nn.Conv2d(
@@ -214,10 +215,10 @@ class Upsample(nn.Module):
         x = self.batch_norm(x)
 
         # convert time_emb from (B, out_channels) to (B, out_channels, 1, 1)
-        time_emb = self.time_emb_layer(time.unsqueeze(-1)/self.num_time_steps)
+        time_emb = self.time_emb_layer(time).unsqueeze(-1).unsqueeze(-1)
         time_emb = self.silu(time_emb)
 
-        x = x + time_emb.unsqueeze(-1).unsqueeze(-1)
+        x = x + time_emb
         x = self.merged_conv(x)
         x = self.silu(x)
         return self.merged_batch_norm(x)

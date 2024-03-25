@@ -53,7 +53,7 @@ class LinearNoiseScheduler(NoiseScheduler):
         self.register_buffer("b1", torch.tensor(b1))
 
     def noise(self, x: torch.Tensor, noise,  time_steps: torch.Tensor):
-        return self._apply_noise(x, noise, time_steps.view(-1, 1, 1, 1) * self.increment + self.b1)
+        return self._apply_noise(x, noise, time_steps.view(time_steps.shape[0], 1, 1, 1) * self.increment + self.b1)
 
 
 class CosineNoiseScheduler(NoiseScheduler):

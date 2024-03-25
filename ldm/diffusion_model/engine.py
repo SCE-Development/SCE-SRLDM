@@ -49,7 +49,7 @@ def train_unet(
             low_res = nearest_upscaler(low_res_scaler(batch)).to(device)
 
             # generate random time steps for each image
-            time_steps = torch.randint(low=0, high=num_timesteps, size=(batch.shape[0],), device=device)
+            time_steps = torch.randint(low=0, high=num_timesteps + 1, size=(batch.shape[0],), device=device)
 
             # generate noise from time step
             noise = torch.randn(batch.shape, device=device).to(device)
@@ -69,8 +69,9 @@ def train_unet(
             # update gradients from loss
             loss.backward()
             optimizer.step()
+            loss = loss.detach().cpu()
 
-            total_loss += loss.detach().cpu()
+            total_loss += loss
             epoch_loss += loss
 
             prog.set_postfix_str(

@@ -4,11 +4,12 @@ import random
 import matplotlib.pyplot as plt
 from PIL import Image
 from torch.utils.data import Dataset
+from typing import Callable, Any
 
 
 def to_image(x: torch.Tensor):
     return Image.fromarray(
-        (torch.clamp(x, 0, 1) * 255)
+        ((torch.clamp(x, -0.5, 0.5) + 0.5) * 255)
         .permute(1, 2, 0)
         .contiguous()
         .to(torch.uint8)
@@ -16,7 +17,13 @@ def to_image(x: torch.Tensor):
     )
 
 
-def get_comparison(num_comparisons: int, ds: Dataset, model: torch.nn.Module):
+def get_comparison(
+    num_comparisons: int,
+    ds: Dataset,
+    model: torch.nn.Module,
+    batch_fn: Callable[[Any], torch.Tensor],
+    device: str,
+):
     """
     Get comparisons between real images and generated images
 
@@ -25,28 +32,30 @@ def get_comparison(num_comparisons: int, ds: Dataset, model: torch.nn.Module):
         - ds: Dataset - the dataset with real images. Note: the dataset should have the image
             tensors (in the format of C,H,W) as the first element in each item
         - model: torch.nn.Module - an autoencoder
+        - batch_fn:
     """
-    choices = []
-    while len(choices) != num_comparisons:
-        i = random.randint(0, len(ds) - 1)
-        if i not in choices:
-            choices.append(i)
+    model.to(device)
+    choices = random.sample(list(range(len(ds))), num_comparisons)
 
     real_images = []
     for i in choices:
-        real_images.append(to_image(ds[i][0]))
+        real_images.append(to_image(batch_fn(ds[i])))
 
-    reconstructed = torch.zeros((num_comparisons, 3, 32, 32))
+    reconstructed = torch.zeros((num_comparisons, *batch_fn(ds[0]).shape))
     for idx, ds_idx in enumerate(choices):
-        reconstructed[idx] = ds[ds_idx][0]
-    reconstructed = reconstructed.to("cuda")
-    reconstructed = model(reconstructed).detach().cpu()
+        reconstructed[idx] = batch_fn(ds[ds_idx])
+    with torch.no_grad():
+        reconstructed = reconstructed.to(device)
+        reconstructed, _ = model(reconstructed)
+        reconstructed = reconstructed.detach().cpu()
 
     reconstructed_imgs = []
     for i in range(num_comparisons):
         reconstructed_imgs.append(to_image(reconstructed[i]))
 
     _, axis_arr = plt.subplots(num_comparisons, 2)
+    axis_arr[0, 0].set_title("Real")
+    axis_arr[0, 1].set_title("Fake")
     for i in range(num_comparisons):
         axis_arr[i, 0].imshow(real_images[i])
         axis_arr[i, 1].imshow(reconstructed_imgs[i])

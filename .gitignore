@@ -1,7 +1,11 @@
-/venv
+./venv
+./.venv
 test.ipynb
-/ldm/autoencoder/__pycache__
+./ldm/autoencoder/__pycache__
+./ldm/diffusion_model/__pycache__
 __pycache__/
+./ldm/autoencoder/runs
 .DS_Store
 ldm/.DS_Store
 models/.DS_Store
+

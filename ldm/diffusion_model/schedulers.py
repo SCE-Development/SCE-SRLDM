@@ -29,7 +29,7 @@ class NoiseScheduler(nn.Module):
         """
         # technically it should be elementwise, but we can basically
         # do it with U(sqrt(1-Bt)xt-1) + N(0, BtI)
-        xt = torch.sqrt(1 - rate) * x + torch.sqrt(rate)*noise
+        xt = torch.sqrt(1-rate) * x + torch.sqrt(rate) * noise
         return xt
 
 

@@ -30,6 +30,7 @@ def train_unet(
     low_res_size = img_shape//downscale_factor
     low_res_scaler = t.Resize(size=low_res_size)
     nearest_upscaler = t.Resize(img_shape, interpolation=t.InterpolationMode.NEAREST_EXACT)
+    best = float('inf')
 
     for epoch in range(1, epochs + 1):
         prog = tqdm(dl)
@@ -49,7 +50,7 @@ def train_unet(
             low_res = nearest_upscaler(low_res_scaler(batch)).to(device)
 
             # generate random time steps for each image
-            time_steps = torch.randint(low=0, high=num_timesteps + 1, size=(batch.shape[0],), device=device)
+            time_steps = torch.randint(low=0, high=num_timesteps, size=(batch.shape[0],), device=device)
 
             # generate noise from time step
             noise = torch.randn(batch.shape, device=device).to(device)

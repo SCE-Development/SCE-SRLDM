@@ -9,3 +9,6 @@ ldm/autoencoder/runs
 ldm/.DS_Store
 models/.DS_Store
 
+models/diffusion_model/best.pt
+models/diffusion_model/best_optim.pt
+
